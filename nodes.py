@@ -107,11 +107,10 @@ class IdentifyAbstractions(Node):
                     context += entry
                     file_info.append((i, path))
                 else:
+                    file_info = [(i, path)]
                     if length_of_tokens(entry) < SPLIT_TOKENS:
                         file_total_info.append(file_info)
                         context_list.append(context)
-                    
-                        file_info = [(i, path)]
                         tokens_num = length_of_tokens(entry)
                         context = entry
                     else:
@@ -119,6 +118,7 @@ class IdentifyAbstractions(Node):
                         for item in content_temp_list:
                             entry_temp = f"--- File Index {i}: {path} ---\n{item}\n\n"
                             context_list.append(entry_temp)
+                            file_total_info.append(file_info)
             if context:
                 context_list.append(context)
                 file_total_info.append(file_info)
