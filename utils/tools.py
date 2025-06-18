@@ -37,3 +37,21 @@ def batch_chunks(chunks: List[str], prompt:str = "", params_name:str = "chunk_li
         cur_tokens += chunk_tokens
     if batch:
         yield batch
+
+
+def split_prompt(
+    prompt: str,
+    max_tokens: int = SPLIT_TOKENS,
+    encoding_name: str = "cl100k_base"
+) -> List[str]:
+    max_tokens = int(max_tokens)
+    enc = tiktoken.get_encoding(encoding_name)
+    all_tokens = enc.encode(prompt, disallowed_special=())
+    chunks: List[str] = []
+    
+    for i in range(0, len(all_tokens), max_tokens):
+        chunk_tokens = all_tokens[i : i + max_tokens]
+        chunk_text = enc.decode(chunk_tokens)
+        chunks.append(chunk_text)
+
+    return chunks
