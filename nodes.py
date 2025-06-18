@@ -195,7 +195,7 @@ Format the output as a YAML list of dictionaries:
         for item  in yaml_str_list:
             for c in item.strip().split("```"):
                 if c.strip():
-                    yaml_str += c.strip() +"\n"
+                    yaml_str += c +"\n"
 
         abstractions = yaml.safe_load(yaml_str)
         abstractions = [] if not abstractions else abstractions
