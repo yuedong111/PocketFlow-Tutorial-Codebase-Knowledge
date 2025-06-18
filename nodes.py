@@ -198,7 +198,11 @@ Format the output as a YAML list of dictionaries:
                     yaml_str += c +"\n"
 
         abstractions = yaml.safe_load(yaml_str)
-        abstractions = [] if not abstractions else abstractions
+        if isinstance(abstractions, dict):
+            res = []
+            for key in abstractions.keys():
+                res.extend(abstractions[key])
+            abstractions = res
         if not isinstance(abstractions, list):
             raise ValueError("LLM Output is not a list")
 
