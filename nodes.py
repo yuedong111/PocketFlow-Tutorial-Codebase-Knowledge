@@ -4,7 +4,7 @@ from pocketflow import Node, BatchNode
 from utils.crawl_github_files import crawl_github_files
 from utils.call_llm import call_llm
 from utils.crawl_local_files import crawl_local_files
-from utils.tools import batch_chunks, length_of_tokens, MAX_TOKENS, SPLIT_TOKENS
+from utils.tools import batch_chunks, length_of_tokens, MAX_TOKENS, SPLIT_TOKENS, split_prompt
 
 
 # Helper to get content for specific file indices
@@ -103,15 +103,22 @@ class IdentifyAbstractions(Node):
             for i, (path, content) in enumerate(files_data):
                 entry = f"--- File Index {i}: {path} ---\n{content}\n\n"
                 tokens_num += length_of_tokens(entry)
-                if tokens_num < SPLIT_TOKENS*0.7:
+                if tokens_num < SPLIT_TOKENS:
                     context += entry
                     file_info.append((i, path))
                 else:
-                    file_total_info.append(file_info)
-                    context_list.append(context)
-                    file_info = [(i, path)]
-                    tokens_num = length_of_tokens(entry)
-                    context = entry
+                    if length_of_tokens(entry) < SPLIT_TOKENS:
+                        file_total_info.append(file_info)
+                        context_list.append(context)
+                    
+                        file_info = [(i, path)]
+                        tokens_num = length_of_tokens(entry)
+                        context = entry
+                    else:
+                        content_temp_list = split_prompt(content)
+                        for item in content_temp_list:
+                            entry_temp = f"--- File Index {i}: {path} ---\n{item}\n\n"
+                            context_list.append(entry_temp)
             if context:
                 context_list.append(context)
                 file_total_info.append(file_info)
@@ -155,6 +162,7 @@ class IdentifyAbstractions(Node):
             file_listing_for_prompt = "\n".join(
                 [f"- {idx} # {path}" for idx, path in file_info[i]]
             )
+            
             prompt = f"""
 For the project `{project_name}`:
 
