@@ -1,5 +1,4 @@
 import os
-import re
 import yaml
 from pocketflow import Node, BatchNode
 from utils.crawl_github_files import crawl_github_files
@@ -104,7 +103,7 @@ class IdentifyAbstractions(Node):
             for i, (path, content) in enumerate(files_data):
                 entry = f"--- File Index {i}: {path} ---\n{content}\n\n"
                 tokens_num += length_of_tokens(entry)
-                if tokens_num < SPLIT_TOKENS*0.8:
+                if tokens_num < SPLIT_TOKENS*0.7:
                     context += entry
                     file_info.append((i, path))
                 else:
@@ -308,7 +307,7 @@ class AnalyzeRelationships(Node):
                 context = "Identified Abstractions:\\n" + info_line + "\\n"
                 token_nums = length_of_tokens(context)
                 abstraction_info_for_prompt = [f"{i} # {abstr['name']}"]
-                all_relevant_indices = set([abstr["files"]])
+                all_relevant_indices = set(abstr["files"])
         if abstraction_info_for_prompt:
             context_list.append(context)
             abstraction_info_for_prompt_list.append(abstraction_info_for_prompt)
