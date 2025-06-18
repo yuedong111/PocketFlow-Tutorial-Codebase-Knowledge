@@ -7,6 +7,7 @@ from utils.call_llm import call_llm
 from utils.crawl_local_files import crawl_local_files
 from utils.tools import batch_chunks, length_of_tokens, MAX_TOKENS, SPLIT_TOKENS
 
+
 # Helper to get content for specific file indices
 def get_content_for_indices(files_data, indices):
     content_map = {}
@@ -67,7 +68,7 @@ class FetchRepo(Node):
                 include_patterns=prep_res["include_patterns"],
                 exclude_patterns=prep_res["exclude_patterns"],
                 max_file_size=prep_res["max_file_size"],
-                use_relative_paths=prep_res["use_relative_paths"]
+                use_relative_paths=prep_res["use_relative_paths"],
             )
 
         # Convert dict to list of tuples: [(path, content), ...]
@@ -78,9 +79,9 @@ class FetchRepo(Node):
         return files_list
 
     def post(self, shared, prep_res, exec_res):
-        shared["files"] = exec_res  # List of (path, content) tuples ('browserbase\\cli.js', "#!/usr/bin/env node\nimport './dist/program.js';")
-        
-        
+        shared["files"] = (
+            exec_res  # List of (path, content) tuples ('browserbase\\cli.js', "#!/usr/bin/env node\nimport './dist/program.js';")
+        )
 
 
 class IdentifyAbstractions(Node):
@@ -89,7 +90,9 @@ class IdentifyAbstractions(Node):
         project_name = shared["project_name"]  # Get project name
         language = shared.get("language", "english")  # Get language
         use_cache = shared.get("use_cache", True)  # Get use_cache flag, default to True
-        max_abstraction_num = shared.get("max_abstraction_num", 10)  # Get max_abstraction_num, default to 10
+        max_abstraction_num = shared.get(
+            "max_abstraction_num", 10
+        )  # Get max_abstraction_num, default to 10
 
         # Helper to create context from files, respecting limits (basic example)
         def create_llm_context(files_data):
@@ -101,7 +104,7 @@ class IdentifyAbstractions(Node):
             for i, (path, content) in enumerate(files_data):
                 entry = f"--- File Index {i}: {path} ---\n{content}\n\n"
                 tokens_num += length_of_tokens(entry)
-                if tokens_num < SPLIT_TOKENS:
+                if tokens_num < SPLIT_TOKENS*0.8:
                     context += entry
                     file_info.append((i, path))
                 else:
@@ -136,7 +139,7 @@ class IdentifyAbstractions(Node):
             language,
             use_cache,
             max_abstraction_num,
-        ) = prep_res  
+        ) = prep_res
         print(f"Identifying abstractions using LLM...")
 
         # Add language instruction and hints only if not English
@@ -144,13 +147,15 @@ class IdentifyAbstractions(Node):
         name_lang_hint = ""
         desc_lang_hint = ""
         if language.lower() != "english":
-            language_instruction = f"IMPORTANT: Generate the `name` and `description` for each abstraction in **{language.capitalize()}** language. Do NOT use English for these fields.\n\n" 
-            
+            language_instruction = f"IMPORTANT: Generate the `name` and `description` for each abstraction in **{language.capitalize()}** language. Do NOT use English for these fields.\n\n"
+
             name_lang_hint = f" (value in {language.capitalize()})"
             desc_lang_hint = f" (value in {language.capitalize()})"
         response_result = ""
         for i, context in enumerate(context_list):
-            file_listing_for_prompt = "\n".join([f"- {idx} # {path}" for idx, path in file_info[i]])
+            file_listing_for_prompt = "\n".join(
+                [f"- {idx} # {path}" for idx, path in file_info[i]]
+            )
             prompt = f"""
 For the project `{project_name}`:
 
@@ -187,16 +192,16 @@ Format the output as a YAML list of dictionaries:
     - 5 # path/to/another.js
 # ... up to {max_abstraction_num} abstractions
 ```"""
-            response = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0))  
-            response_result += response +"\n"
+            response = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0))
+            response_result += response + "\n"
 
         yaml_str = ""
         yaml_str_list = response_result.strip().split("```yaml")
-        for item  in yaml_str_list:
+        for item in yaml_str_list:
             for c in item.strip().split("```"):
                 if c.strip():
-                    yaml_str += c +"\n"
-
+                    yaml_str += c + "\n"
+        
         abstractions = yaml.safe_load(yaml_str)
         if isinstance(abstractions, dict):
             res = []
@@ -278,7 +283,7 @@ class AnalyzeRelationships(Node):
         context_list = []
         context = "Identified Abstractions:\\n"
         context_header = "Identified Abstractions:\\n"
-        tokens_nums = 0
+        token_nums = 0
         all_relevant_indices_list = list()
 
         all_relevant_indices = set()
@@ -290,7 +295,7 @@ class AnalyzeRelationships(Node):
             # Abstraction name and description might be translated already
             info_line = f"- Index {i}: {abstr['name']} (Relevant file indices: [{file_indices_str}])\\n  Description: {abstr['description']}"
             token_nums += length_of_tokens(info_line)
-            if token_nums < SPLIT_TOKENS*0.5:
+            if token_nums < SPLIT_TOKENS * 0.5:
                 context += info_line + "\\n"
                 abstraction_info_for_prompt.append(
                     f"{i} # {abstr['name']}"
@@ -301,6 +306,7 @@ class AnalyzeRelationships(Node):
                 abstraction_info_for_prompt_list.append(abstraction_info_for_prompt)
                 all_relevant_indices_list.append(all_relevant_indices)
                 context = "Identified Abstractions:\\n" + info_line + "\\n"
+                token_nums = length_of_tokens(context)
                 abstraction_info_for_prompt = [f"{i} # {abstr['name']}"]
                 all_relevant_indices = set([abstr["files"]])
         if abstraction_info_for_prompt:
@@ -308,16 +314,15 @@ class AnalyzeRelationships(Node):
             abstraction_info_for_prompt_list.append(abstraction_info_for_prompt)
             all_relevant_indices_list.append(all_relevant_indices)
 
-
         for context_index, context in enumerate(context_list):
-            
+
             context += "\\nRelevant File Snippets (Referenced by Index and Path):\\n"
             relevant_files_content_map = get_content_for_indices(
-                files_data, sorted(list(all_relevant_indices_list[context_list]))
+                files_data, sorted(list(all_relevant_indices_list[context_index]))
             )
             file_context_str = ""
             token_nums = 0
-       
+
             for idx_path, content in relevant_files_content_map.items():
                 entry = f"--- File: {idx_path} ---\\n{content}" + "\\n\\n"
                 token_nums += length_of_tokens(entry)
@@ -326,14 +331,15 @@ class AnalyzeRelationships(Node):
                 else:
                     context += file_context_str
                     file_context_str = ""
-            if  file_context_str:
+                    token_nums = length_of_tokens(context)
+            if file_context_str:
                 context += file_context_str
             context_list[context_index] = context
 
         return (
             context_list,
             abstraction_info_for_prompt_list,
-            num_abstractions, # Pass the actual count
+            num_abstractions,  # Pass the actual count
             project_name,
             language,
             use_cache,
@@ -343,11 +349,11 @@ class AnalyzeRelationships(Node):
         (
             context_list,
             abstraction_info_listing,
-            num_abstractions, # Receive the actual count
+            num_abstractions,  # Receive the actual count
             project_name,
             language,
             use_cache,
-         ) = prep_res  # Unpack use_cache
+        ) = prep_res  # Unpack use_cache
         print(f"Analyzing relationships using LLM...")
 
         # Add language instruction and hints only if not English
@@ -399,17 +405,18 @@ relationships:
 
 Now, provide the YAML output:
 """
-            response = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0)) # Use cache only if enabled and not retrying
-            response_result += response +"\n"
+            response = call_llm(
+                prompt, use_cache=(use_cache and self.cur_retry == 0)
+            )  # Use cache only if enabled and not retrying
+            response_result += response + "\n"
 
         yaml_str = ""
         yaml_str_list = response_result.strip().split("```yaml")
-        for item  in yaml_str_list:
+        for item in yaml_str_list:
             for c in item.strip().split("```"):
                 if c.strip():
-                    yaml_str += c.strip() +"\n"
+                    yaml_str += c.strip() + "\n"
         relationships_data = yaml.safe_load(yaml_str)
-
         if not isinstance(relationships_data, dict) or not all(
             k in relationships_data for k in ["summary", "relationships"]
         ):
@@ -455,7 +462,9 @@ Now, provide the YAML output:
             except (ValueError, TypeError):
                 raise ValueError(f"Could not parse indices from relationship: {rel}")
 
-        print(f"Generated project summary and relationship details {len(validated_relationships)}.")
+        print(
+            f"Generated project summary and relationship details {len(validated_relationships)}."
+        )
         return {
             "summary": relationships_data["summary"],  # Potentially translated summary
             "details": validated_relationships,  # Store validated, index-based relationships with potentially translated labels
@@ -546,9 +555,10 @@ Output the ordered list of abstraction indices, including the name in a comment 
 
 Now, provide the YAML output:
 """
-        response = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0)) # Use cache only if enabled and not retrying
+        response = call_llm(
+            prompt, use_cache=(use_cache and self.cur_retry == 0)
+        )  # Use cache only if enabled and not retrying
 
-  
         yaml_str = response.strip().split("```yaml")[1].split("```")[0].strip()
         ordered_indices_raw = yaml.safe_load(yaml_str)
 
@@ -581,6 +591,7 @@ Now, provide the YAML output:
                 )
 
         # Check if all abstractions are included
+
         if len(ordered_indices) != num_abstractions:
             raise ValueError(
                 f"Ordered list length ({len(ordered_indices)}) does not match number of abstractions ({num_abstractions}). Missing indices: {set(range(num_abstractions)) - seen_indices}"
@@ -592,7 +603,6 @@ Now, provide the YAML output:
     def post(self, shared, prep_res, exec_res):
         # exec_res is already the list of ordered indices
         shared["chapter_order"] = exec_res  # List of indices
-
 
 class WriteChapters(BatchNode):
     def prep(self, shared):
@@ -689,6 +699,7 @@ class WriteChapters(BatchNode):
 
     def exec(self, item):
         # This runs for each item prepared above
+        print(item)
         abstraction_name = item["abstraction_details"][
             "name"
         ]  # Potentially translated name
@@ -702,10 +713,10 @@ class WriteChapters(BatchNode):
         print(f"Writing chapter {chapter_num} for: {abstraction_name} using LLM...")
 
         # Prepare file context string from the map
-        file_context_str = "\n\n".join(
-            f"--- File: {idx_path.split('# ')[1] if '# ' in idx_path else idx_path} ---\n{content}"
-            for idx_path, content in item["related_files_content_map"].items()
-        )
+        # file_context_str = "\n\n".join(
+        #     f"--- File: {idx_path.split('# ')[1] if '# ' in idx_path else idx_path} ---\n{content}"
+        #     for idx_path, content in item["related_files_content_map"].items()
+        # )
 
         # Get summary of chapters written *before* this one
         # Use the temporary instance variable
@@ -735,7 +746,25 @@ class WriteChapters(BatchNode):
             )
             tone_note = f" (appropriate for {lang_cap} readers)"
 
-        prompt = f"""
+        file_context_str_list = []
+        file_context_str_1 = ""
+        tokens_num = 0
+        for idx_path, content in item["related_files_content_map"].items():
+            temp = f"--- File: {idx_path.split('# ')[1] if '# ' in idx_path else idx_path} ---\n{content}"+ "\n\n"
+            tokens_num += length_of_tokens(temp)
+            if tokens_num < SPLIT_TOKENS*0.5:
+                file_context_str_1 += temp
+            else:
+                file_context_str_1 = temp
+                tokens_num = length_of_tokens(temp)
+                file_context_str_list.append(file_context_str_1)
+        if file_context_str_1:
+            file_context_str_list.append(file_context_str_1)
+        
+        write_content = []
+        for file_context_str in file_context_str_list:
+
+            prompt = f"""
 {language_instruction}Write a very beginner-friendly tutorial chapter (in Markdown format) for the project `{project_name}` about the concept: "{abstraction_name}". This is Chapter {chapter_num}.
 
 Concept Details{concept_details_note}:
@@ -783,24 +812,24 @@ Instructions for the chapter (Generate content in {language.capitalize()} unless
 
 Now, directly provide a super beginner-friendly Markdown output (DON'T need ```markdown``` tags):
 """
-        chapter_content = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0)) # Use cache only if enabled and not retrying
+            chapter_content = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0)) # Use cache only if enabled and not retrying
         # Basic validation/cleanup
-        actual_heading = f"# Chapter {chapter_num}: {abstraction_name}"  # Use potentially translated name
-        if not chapter_content.strip().startswith(f"# Chapter {chapter_num}"):
+            actual_heading = f"# Chapter {chapter_num}: {abstraction_name}"  # Use potentially translated name
+            if not chapter_content.strip().startswith(f"# Chapter {chapter_num}"):
             # Add heading if missing or incorrect, trying to preserve content
-            lines = chapter_content.strip().split("\n")
-            if lines and lines[0].strip().startswith(
+                lines = chapter_content.strip().split("\n")
+                if lines and lines[0].strip().startswith(
                 "#"
-            ):  # If there's some heading, replace it
-                lines[0] = actual_heading
-                chapter_content = "\n".join(lines)
-            else:  # Otherwise, prepend it
-                chapter_content = f"{actual_heading}\n\n{chapter_content}"
+                ):  # If there's some heading, replace it
+                    lines[0] = actual_heading
+                    chapter_content = "\n".join(lines)
+                else:  # Otherwise, prepend it
+                    chapter_content = f"{actual_heading}\n\n{chapter_content}"
 
-        # Add the generated content to our temporary list for the next iteration's context
-        self.chapters_written_so_far.append(chapter_content)
+            write_content.append(chapter_content)
+        self.chapters_written_so_far.append("\n".join(write_content))
 
-        return chapter_content  # Return the Markdown string (potentially translated)
+        return "\n".join(write_content)  # Return the Markdown string (potentially translated)
 
     def post(self, shared, prep_res, exec_res_list):
         # exec_res_list contains the generated Markdown for each chapter, in order
