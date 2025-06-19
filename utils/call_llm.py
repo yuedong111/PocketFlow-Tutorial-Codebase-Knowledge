@@ -3,6 +3,12 @@ import os
 import logging
 import json
 from datetime import datetime
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_openai import ChatOpenAI
+from retry import retry
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.chains.summarize import load_summarize_chain
+from langchain.docstore.document import Document
 
 # Configure logging
 log_directory = os.getenv("LOG_DIR", "logs")
@@ -15,7 +21,7 @@ log_file = os.path.join(
 logger = logging.getLogger("llm_logger")
 logger.setLevel(logging.INFO)
 logger.propagate = False  # Prevent propagation to root logger
-file_handler = logging.FileHandler(log_file, encoding='utf-8')
+file_handler = logging.FileHandler(log_file, encoding="utf-8")
 file_handler.setFormatter(
     logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 )
@@ -24,15 +30,21 @@ logger.addHandler(file_handler)
 # Simple cache configuration
 cache_file = "llm_cache.json"
 
+@retry(tries=5, delay=3, logger=logger)
+def call_llm_retry(prompt: str, cfg: dict):
+    try:
+        return call_llm(prompt, max_token=cfg["max_token"])
+    except Exception as e:
+        cfg["max_token"] = int(cfg["max_token"] * 0.8)  
+        raise e 
+     
 
-# By default, we Google Gemini 2.5 pro, as it shows great performance for code understanding
-def call_llm(prompt: str, use_cache: bool = True) -> str:
+def call_llm(prompt: str, use_cache: bool = True, max_token=7000) -> str:
     # Log the prompt
     logger.info(f"PROMPT: {prompt}")
 
-    # Check cache if enabled
     if use_cache:
-        # Load cache from disk
+
         cache = {}
         if os.path.exists(cache_file):
             try:
@@ -41,35 +53,34 @@ def call_llm(prompt: str, use_cache: bool = True) -> str:
             except:
                 logger.warning(f"Failed to load cache, starting with empty cache")
 
-        # Return from cache if exists
         if prompt in cache:
             logger.info(f"RESPONSE: {cache[prompt]}")
             return cache[prompt]
 
-    # # Call the LLM if not in cache or cache disabled
-    # client = genai.Client(
-    #     vertexai=True,
-    #     # TODO: change to your own project id and location
-    #     project=os.getenv("GEMINI_PROJECT_ID", "your-project-id"),
-    #     location=os.getenv("GEMINI_LOCATION", "us-central1")
-    # )
-
-    # You can comment the previous line and use the AI Studio key instead:
-    client = genai.Client(
-        api_key=os.getenv("GEMINI_API_KEY", ""),
+    model = ChatOpenAI(
+        model="DeepSeek-R1-671B",
+        max_tokens=max_token,
+        api_key="c238030d-d481-442b-984e-4d0921da5c1a",
+        base_url="http://10.201.195.81:8080/v1",
+        **{"temperature": 0.0},
     )
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-pro-exp-03-25")
-    # model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-preview-04-17")
-    
-    response = client.models.generate_content(model=model, contents=[prompt])
-    response_text = response.text
+    # model = ChatOpenAI(
+    #     openai_api_key='ak-nFAPq0OizuBGtsr8u4Fo8Lzoktpk6Mft5YQpGDiL9AGPrJRo',
+    #     base_url="https://delphai.deloitte.com.cn/v1",
+    #     model_name='Qwen2.5-72B-Instruct',
+    #     max_tokens=7000,
+    #     **{"temperature": 0.0},
+    # )
+    # client = genai.Client(
+    #      api_key=os.getenv("GEMINI_API_KEY", "AIzaSyA16fqKbrooSktHvVTxwvaQDDAs2AyflHI"),
+    # )
+    # model = os.getenv("GEMINI_MODEL", "gemini-2.5-pro-exp-03-25")
+    response = model.invoke(prompt)
+    response_text = response.content
 
-    # Log the response
     logger.info(f"RESPONSE: {response_text}")
 
-    # Update cache if enabled
     if use_cache:
-        # Load cache again to avoid overwrites
         cache = {}
         if os.path.exists(cache_file):
             try:
@@ -174,7 +185,7 @@ def call_llm(prompt: str, use_cache: bool = True) -> str:
 #     # OpenRouter API configuration
 #     api_key = os.getenv("OPENROUTER_API_KEY", "")
 #     model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free")
-    
+
 #     headers = {
 #         "Authorization": f"Bearer {api_key}",
 #     }
@@ -198,9 +209,9 @@ def call_llm(prompt: str, use_cache: bool = True) -> str:
 #         response_text = response.json()["choices"][0]["message"]["content"]
 #     except Exception as e:
 #         error_msg = f"Failed to parse OpenRouter response: {e}; Response: {response.text}"
-#         logger.error(error_msg)        
+#         logger.error(error_msg)
 #         raise Exception(error_msg)
-    
+
 
 #     # Log the response
 #     logger.info(f"RESPONSE: {response_text}")
