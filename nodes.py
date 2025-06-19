@@ -820,10 +820,29 @@ Now, directly provide a super beginner-friendly Markdown output (DON'T need ```m
             else:
                 file_context_str_1 = temp
                 tokens_num = length_of_tokens(temp)
-                file_context_str_list.append(file_context_str_1)
+                if tokens_num > SPLIT_TOKENS*0.6:
+                    len_temp = len(temp)
+                    count_start = 0
+                    while True:
+                        file_context_str_list.append(temp[count_start:count_start+10000])
+                        count_start += 10000
+                        if len_temp <= count_start:
+                            break
+                else:
+                    file_context_str_list.append(file_context_str_1)
                 
         if file_context_str_1:
-            file_context_str_list.append(file_context_str_1)
+            tokens_num = length_of_tokens(file_context_str_1)
+            if tokens_num > SPLIT_TOKENS*0.6:
+                len_temp = len(file_context_str_1)
+                count_start = 0
+                while True:
+                    file_context_str_list.append(file_context_str_1[count_start:count_start+10000])
+                    count_start += 10000
+                    if len_temp <= count_start:
+                        break
+            else:
+                file_context_str_list.append(file_context_str_1)
         
         write_content = []
         full_chapter_listing = item["full_chapter_listing"]
