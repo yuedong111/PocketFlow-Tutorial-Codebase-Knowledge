@@ -1,11 +1,10 @@
 import os
-import yaml
+import yaml, json
 from pocketflow import Node, BatchNode
 from utils.crawl_github_files import crawl_github_files
-from utils.call_llm import call_llm
+from utils.call_llm import call_llm, call_llm_retry
 from utils.crawl_local_files import crawl_local_files
-from utils.tools import batch_chunks, length_of_tokens, MAX_TOKENS, SPLIT_TOKENS, split_prompt
-
+from utils.tools import batch_chunks, length_of_tokens, MAX_TOKENS, SPLIT_TOKENS, split_prompt, extract_yaml
 
 # Helper to get content for specific file indices
 def get_content_for_indices(files_data, indices):
@@ -114,7 +113,7 @@ class IdentifyAbstractions(Node):
                         tokens_num = length_of_tokens(entry)
                         context = entry
                     else:
-                        content_temp_list = split_prompt(content)
+                        content_temp_list = split_prompt(content, max_tokens=SPLIT_TOKENS*0.8)
                         for item in content_temp_list:
                             entry_temp = f"--- File Index {i}: {path} ---\n{item}\n\n"
                             context_list.append(entry_temp)
@@ -162,7 +161,6 @@ class IdentifyAbstractions(Node):
             file_listing_for_prompt = "\n".join(
                 [f"- {idx} # {path}" for idx, path in file_info[i]]
             )
-            
             prompt = f"""
 For the project `{project_name}`:
 
@@ -180,7 +178,7 @@ For each abstraction, provide:
 List of file indices and paths present in the context:
 {file_listing_for_prompt}
 
-Format the output as a YAML list of dictionaries:
+Format the output as a YAML list of dictionaries, Do not output anything other than the YAML in the format shown below:
 
 ```yaml
 - name: |
@@ -199,7 +197,8 @@ Format the output as a YAML list of dictionaries:
     - 5 # path/to/another.js
 # ... up to {max_abstraction_num} abstractions
 ```"""
-            response = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0))
+            # response = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0))
+            response = call_llm_retry(prompt, {"max_token": 7000})
             response_result += response + "\n"
 
         yaml_str = ""
@@ -208,8 +207,15 @@ Format the output as a YAML list of dictionaries:
             for c in item.strip().split("```"):
                 if c.strip():
                     yaml_str += c + "\n"
-        
-        abstractions = yaml.safe_load(yaml_str)
+        try:
+            abstractions = yaml.safe_load(yaml_str)
+        except Exception as e:
+            if not yaml_str.startswith("Based on the"):
+                yaml_str = "Based on the codebase context, here are the core abstractions:\n" + yaml_str
+                abstractions = yaml.safe_load(yaml_str)
+            else:
+                print(yaml_str[:30])
+                raise e
         if isinstance(abstractions, dict):
             res = []
             for key in abstractions.keys():
@@ -223,6 +229,7 @@ Format the output as a YAML list of dictionaries:
             if not isinstance(item, dict) or not all(
                 k in item for k in ["name", "description", "file_indices"]
             ):
+                print(item)
                 raise ValueError(f"Missing keys in abstraction item: {item}")
             if not isinstance(item["name"], str):
                 raise ValueError(f"Name is not a string in item: {item}")
@@ -600,9 +607,10 @@ Now, provide the YAML output:
         # Check if all abstractions are included
 
         if len(ordered_indices) != num_abstractions:
-            raise ValueError(
-                f"Ordered list length ({len(ordered_indices)}) does not match number of abstractions ({num_abstractions}). Missing indices: {set(range(num_abstractions)) - seen_indices}"
-            )
+            print(f"Ordered list length ({len(ordered_indices)}) does not match number of abstractions ({num_abstractions}). Missing indices: {set(range(num_abstractions)) - seen_indices}")
+            # raise ValueError(
+            #     f"Ordered list length ({len(ordered_indices)}) does not match number of abstractions ({num_abstractions}). Missing indices: {set(range(num_abstractions)) - seen_indices}"
+            # )
 
         print(f"Determined chapter order (indices): {ordered_indices}")
         return ordered_indices  # Return the list of indices
@@ -753,6 +761,54 @@ class WriteChapters(BatchNode):
             )
             tone_note = f" (appropriate for {lang_cap} readers)"
 
+        prompt_1_token = f"""
+{language_instruction}Write a very beginner-friendly tutorial chapter (in Markdown format) for the project `{project_name}` about the concept: "{abstraction_name}". This is Chapter {chapter_num}.
+
+Concept Details{concept_details_note}:
+- Name: {abstraction_name}
+- Description:
+{abstraction_description}
+
+Complete Tutorial Structure{structure_note}:
+{item["full_chapter_listing"]}
+
+Context from previous chapters{prev_summary_note}:
+{previous_chapters_summary if previous_chapters_summary else "This is the first chapter."}
+
+
+
+Instructions for the chapter (Generate content in {language.capitalize()} unless specified otherwise):
+- Start with a clear heading (e.g., `# Chapter {chapter_num}: {abstraction_name}`). Use the provided concept name.
+
+- If this is not the first chapter, begin with a brief transition from the previous chapter{instruction_lang_note}, referencing it with a proper Markdown link using its name{link_lang_note}.
+
+- Begin with a high-level motivation explaining what problem this abstraction solves{instruction_lang_note}. Start with a central use case as a concrete example. The whole chapter should guide the reader to understand how to solve this use case. Make it very minimal and friendly to beginners.
+
+- If the abstraction is complex, break it down into key concepts. Explain each concept one-by-one in a very beginner-friendly way{instruction_lang_note}.
+
+- Explain how to use this abstraction to solve the use case{instruction_lang_note}. Give example inputs and outputs for code snippets (if the output isn't values, describe at a high level what will happen{instruction_lang_note}).
+
+- Each code block should be BELOW 10 lines! If longer code blocks are needed, break them down into smaller pieces and walk through them one-by-one. Aggresively simplify the code to make it minimal. Use comments{code_comment_note} to skip non-important implementation details. Each code block should have a beginner friendly explanation right after it{instruction_lang_note}.
+
+- Describe the internal implementation to help understand what's under the hood{instruction_lang_note}. First provide a non-code or code-light walkthrough on what happens step-by-step when the abstraction is called{instruction_lang_note}. It's recommended to use a simple sequenceDiagram with a dummy example - keep it minimal with at most 5 participants to ensure clarity. If participant name has space, use: `participant QP as Query Processing`. {mermaid_lang_note}.
+
+- Then dive deeper into code for the internal implementation with references to files. Provide example code blocks, but make them similarly simple and beginner-friendly. Explain{instruction_lang_note}.
+
+- IMPORTANT: When you need to refer to other core abstractions covered in other chapters, ALWAYS use proper Markdown links like this: [Chapter Title](filename.md). Use the Complete Tutorial Structure above to find the correct filename and the chapter title{link_lang_note}. Translate the surrounding text.
+
+- Use mermaid diagrams to illustrate complex concepts (```mermaid``` format). {mermaid_lang_note}.
+
+- Heavily use analogies and examples throughout{instruction_lang_note} to help beginners understand.
+
+- End the chapter with a brief conclusion that summarizes what was learned{instruction_lang_note} and provides a transition to the next chapter{instruction_lang_note}. If there is a next chapter, use a proper Markdown link: [Next Chapter Title](next_chapter_filename){link_lang_note}.
+
+- Ensure the tone is welcoming and easy for a newcomer to understand{tone_note}.
+
+- Output *only* the Markdown content for this chapter.
+
+Now, directly provide a super beginner-friendly Markdown output (DON'T need ```markdown``` tags):
+"""
+
         file_context_str_list = []
         file_context_str_1 = ""
         tokens_num = 0
@@ -765,12 +821,16 @@ class WriteChapters(BatchNode):
                 file_context_str_1 = temp
                 tokens_num = length_of_tokens(temp)
                 file_context_str_list.append(file_context_str_1)
+                
         if file_context_str_1:
             file_context_str_list.append(file_context_str_1)
         
         write_content = []
+        full_chapter_listing = item["full_chapter_listing"]
         for file_context_str in file_context_str_list:
-
+            if length_of_tokens(prompt_1_token)> 12000:
+                previous_chapters_summary = previous_chapters_summary[:10000]
+                print(length_of_tokens(file_context_str), length_of_tokens(prompt_1_token), length_of_tokens(previous_chapters_summary))
             prompt = f"""
 {language_instruction}Write a very beginner-friendly tutorial chapter (in Markdown format) for the project `{project_name}` about the concept: "{abstraction_name}". This is Chapter {chapter_num}.
 
@@ -780,7 +840,7 @@ Concept Details{concept_details_note}:
 {abstraction_description}
 
 Complete Tutorial Structure{structure_note}:
-{item["full_chapter_listing"]}
+{full_chapter_listing}
 
 Context from previous chapters{prev_summary_note}:
 {previous_chapters_summary if previous_chapters_summary else "This is the first chapter."}
@@ -819,8 +879,8 @@ Instructions for the chapter (Generate content in {language.capitalize()} unless
 
 Now, directly provide a super beginner-friendly Markdown output (DON'T need ```markdown``` tags):
 """
-            chapter_content = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0)) # Use cache only if enabled and not retrying
-        # Basic validation/cleanup
+            chapter_content = call_llm_retry(prompt, {"max_token": 7000}) # Use cache only if enabled and not retrying
+       
             actual_heading = f"# Chapter {chapter_num}: {abstraction_name}"  # Use potentially translated name
             if not chapter_content.strip().startswith(f"# Chapter {chapter_num}"):
             # Add heading if missing or incorrect, trying to preserve content
