@@ -4,7 +4,7 @@ from pocketflow import Node, BatchNode
 from utils.crawl_github_files import crawl_github_files
 from utils.call_llm import call_llm, call_llm_retry
 from utils.crawl_local_files import crawl_local_files
-from utils.tools import batch_chunks, length_of_tokens, MAX_TOKENS, SPLIT_TOKENS, split_prompt, extract_yaml
+from utils.tools import batch_chunks, length_of_tokens, MAX_TOKENS, SPLIT_TOKENS, split_prompt
 
 # Helper to get content for specific file indices
 def get_content_for_indices(files_data, indices):
@@ -829,7 +829,7 @@ Now, directly provide a super beginner-friendly Markdown output (DON'T need ```m
         full_chapter_listing = item["full_chapter_listing"]
         for file_context_str in file_context_str_list:
             if length_of_tokens(prompt_1_token)> 12000:
-                previous_chapters_summary = previous_chapters_summary[:10000]
+                previous_chapters_summary = previous_chapters_summary[-10000:]
                 print(length_of_tokens(file_context_str), length_of_tokens(prompt_1_token), length_of_tokens(previous_chapters_summary))
             prompt = f"""
 {language_instruction}Write a very beginner-friendly tutorial chapter (in Markdown format) for the project `{project_name}` about the concept: "{abstraction_name}". This is Chapter {chapter_num}.
@@ -904,6 +904,8 @@ Now, directly provide a super beginner-friendly Markdown output (DON'T need ```m
         # Clean up the temporary instance variable
         del self.chapters_written_so_far
         print(f"Finished writing {len(exec_res_list)} chapters.")
+
+
 
 
 class CombineTutorial(Node):
