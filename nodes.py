@@ -619,6 +619,7 @@ Now, provide the YAML output:
         # exec_res is already the list of ordered indices
         shared["chapter_order"] = exec_res  # List of indices
 
+
 class WriteChapters(BatchNode):
     def prep(self, shared):
         chapter_order = shared["chapter_order"]  # List of indices
@@ -630,9 +631,7 @@ class WriteChapters(BatchNode):
         language = shared.get("language", "english")
         use_cache = shared.get("use_cache", True)  # Get use_cache flag, default to True
 
-        # Get already written chapters to provide context
-        # We store them temporarily during the batch run, not in shared memory yet
-        # The 'previous_chapters_summary' will be built progressively in the exec context
+        
         self.chapters_written_so_far = (
             []
         )  # Use instance variable for temporary storage across exec calls
@@ -794,6 +793,8 @@ Instructions for the chapter (Generate content in {language.capitalize()} unless
 
 - Then dive deeper into code for the internal implementation with references to files. Provide example code blocks, but make them similarly simple and beginner-friendly. Explain{instruction_lang_note}.
 
+- If earlier chapters already cover content that is very similar to what you plan to write, skip that repeated material and focus on new, different content instead. This helps avoid redundancy across chapters.
+
 - IMPORTANT: When you need to refer to other core abstractions covered in other chapters, ALWAYS use proper Markdown links like this: [Chapter Title](filename.md). Use the Complete Tutorial Structure above to find the correct filename and the chapter title{link_lang_note}. Translate the surrounding text.
 
 - Use mermaid diagrams to illustrate complex concepts (```mermaid``` format). {mermaid_lang_note}.
@@ -820,7 +821,7 @@ Now, directly provide a super beginner-friendly Markdown output (DON'T need ```m
             else:
                 file_context_str_1 = temp
                 tokens_num = length_of_tokens(temp)
-                if tokens_num > SPLIT_TOKENS*0.6:
+                if tokens_num > SPLIT_TOKENS*0.65:
                     len_temp = len(temp)
                     count_start = 0
                     while True:
@@ -833,7 +834,7 @@ Now, directly provide a super beginner-friendly Markdown output (DON'T need ```m
                 
         if file_context_str_1:
             tokens_num = length_of_tokens(file_context_str_1)
-            if tokens_num > SPLIT_TOKENS*0.6:
+            if tokens_num > SPLIT_TOKENS*0.65:
                 len_temp = len(file_context_str_1)
                 count_start = 0
                 while True:
@@ -884,6 +885,8 @@ Instructions for the chapter (Generate content in {language.capitalize()} unless
 
 - Then dive deeper into code for the internal implementation with references to files. Provide example code blocks, but make them similarly simple and beginner-friendly. Explain{instruction_lang_note}.
 
+- If earlier chapters already cover content that is very similar to what you plan to write, skip that repeated material and focus on new, different content instead. This helps avoid redundancy across chapters.
+
 - IMPORTANT: When you need to refer to other core abstractions covered in other chapters, ALWAYS use proper Markdown links like this: [Chapter Title](filename.md). Use the Complete Tutorial Structure above to find the correct filename and the chapter title{link_lang_note}. Translate the surrounding text.
 
 - Use mermaid diagrams to illustrate complex concepts (```mermaid``` format). {mermaid_lang_note}.
@@ -923,7 +926,6 @@ Now, directly provide a super beginner-friendly Markdown output (DON'T need ```m
         # Clean up the temporary instance variable
         del self.chapters_written_so_far
         print(f"Finished writing {len(exec_res_list)} chapters.")
-
 
 
 
