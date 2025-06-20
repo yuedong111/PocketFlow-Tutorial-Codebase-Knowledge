@@ -60,7 +60,7 @@ def call_llm(prompt: str, use_cache: bool = True, max_token=7000) -> str:
     model = ChatOpenAI(
         model="DeepSeek-R1-671B",
         max_tokens=max_token,
-        api_key="c238030d-d481-442b-984e-4d0921da5c1a",
+        api_key="c238030d-d481-442b-984e-4d0921da5c",
         base_url="http://10.201.195.81:8080/v1",
         **{"temperature": 0.0},
     )
