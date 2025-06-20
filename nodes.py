@@ -178,7 +178,7 @@ For each abstraction, provide:
 List of file indices and paths present in the context:
 {file_listing_for_prompt}
 
-Format the output as a YAML list of dictionaries, Do not output anything other than the YAML in the format shown below:
+Format the output as a YAML list of dictionaries,Format the output **strictly** as **one** YAML code block and **nothing else**:
 
 ```yaml
 - name: |
