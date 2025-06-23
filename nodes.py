@@ -572,8 +572,11 @@ Now, provide the YAML output:
         response = call_llm(
             prompt, use_cache=(use_cache and self.cur_retry == 0)
         )  # Use cache only if enabled and not retrying
-
-        yaml_str = response.strip().split("```yaml")[1].split("```")[0].strip()
+        try:
+            yaml_str = response.strip().split("```yaml")[1].split("```")[0].strip()
+        except Exception as e:
+            with open("tt.txt", "w", encoding="utf-8") as f:
+                print(response, file=f)
         ordered_indices_raw = yaml.safe_load(yaml_str)
 
         if not isinstance(ordered_indices_raw, list):
@@ -618,7 +621,6 @@ Now, provide the YAML output:
     def post(self, shared, prep_res, exec_res):
         # exec_res is already the list of ordered indices
         shared["chapter_order"] = exec_res  # List of indices
-
 
 class WriteChapters(BatchNode):
     def prep(self, shared):
@@ -926,6 +928,7 @@ Now, directly provide a super beginner-friendly Markdown output (DON'T need ```m
         # Clean up the temporary instance variable
         del self.chapters_written_so_far
         print(f"Finished writing {len(exec_res_list)} chapters.")
+
 
 
 
