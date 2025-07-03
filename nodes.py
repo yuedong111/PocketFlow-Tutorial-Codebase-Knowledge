@@ -569,9 +569,9 @@ Output the ordered list of abstraction indices, including the name in a comment 
 
 Now, provide the YAML output:
 """
-        response = call_llm(
-            prompt, use_cache=(use_cache and self.cur_retry == 0)
-        )  # Use cache only if enabled and not retrying
+        response = call_llm_retry(
+            prompt, {"max_token": 7000}
+        )
         try:
             yaml_str = response.strip().split("```yaml")[1].split("```")[0].strip()
         except Exception as e:
