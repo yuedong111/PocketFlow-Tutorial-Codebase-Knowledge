@@ -30,13 +30,16 @@ logger.addHandler(file_handler)
 # Simple cache configuration
 cache_file = "llm_cache.json"
 
-@retry(tries=5, delay=3, logger=logger)
+@retry(tries=8, delay=1, logger=logger)
 def call_llm_retry(prompt: str, cfg: dict):
     try:
-        return call_llm(prompt, max_token=cfg["max_token"])
+        res = call_llm(prompt, max_token=cfg["max_token"])
+        if len(res.strip()) < 2:
+            raise TypeError("no response error")
+        return res
     except Exception as e:
-        cfg["max_token"] = int(cfg["max_token"] * 0.8)  
-        raise e 
+        if "no response error" not in str(e):
+            cfg["max_token"] = int(cfg["max_token"] * 0.8)  
      
 
 def call_llm(prompt: str, use_cache: bool = True, max_token=7000) -> str:
