@@ -198,7 +198,7 @@ Format the output as a YAML list of dictionaries,Format the output **strictly** 
 # ... up to {max_abstraction_num} abstractions
 ```"""
             # response = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0))
-            response = call_llm_retry(prompt, {"max_token": 7000})
+            response = call_llm_retry(prompt, {"max_token": MAX_TOKENS-SPLIT_TOKENS-1000})
             response_result += response + "\n"
 
         yaml_str = ""
@@ -570,7 +570,7 @@ Output the ordered list of abstraction indices, including the name in a comment 
 Now, provide the YAML output:
 """
         response = call_llm_retry(
-            prompt, {"max_token": 7000}
+            prompt, {"max_token": MAX_TOKENS-SPLIT_TOKENS-1000}
         )
         try:
             yaml_str = response.strip().split("```yaml")[1].split("```")[0].strip()
