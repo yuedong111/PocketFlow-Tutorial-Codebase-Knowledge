@@ -172,7 +172,7 @@ Identify the top 5-{max_abstraction_num} core most important abstractions to hel
 
 For each abstraction, provide:
 1. A concise `name`{name_lang_hint}.
-2. A beginner-friendly `description` explaining what it is with a simple analogy, in around 100 words{desc_lang_hint}.
+2. A beginner-friendly `description` explaining what it is with a simple analogy, in around 300 words{desc_lang_hint}.
 3. A list of relevant `file_indices` (integers) using the format `idx # path/comment`.
 
 List of file indices and paths present in the context:
