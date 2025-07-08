@@ -38,8 +38,8 @@ def call_llm_retry(prompt: str, cfg: dict):
             raise TypeError("no response error")
         return res
     except Exception as e:
-        if "no response error" not in str(e):
-            cfg["max_token"] = int(cfg["max_token"] * 0.8)  
+        cfg["max_token"] = int(cfg["max_token"] * 0.8)  
+        raise e
      
 
 def call_llm(prompt: str, use_cache: bool = True, max_token=7000) -> str:
