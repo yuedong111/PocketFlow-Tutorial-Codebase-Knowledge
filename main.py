@@ -15,7 +15,7 @@ DEFAULT_INCLUDE_PATTERNS = {
 
 DEFAULT_EXCLUDE_PATTERNS = {
     "assets/*", "data/*", "images/*", "public/*", "static/*", "temp/*",
-    "*docs/*",
+   # "*docs/*",
     "*venv/*",
     "*.venv/*",
     "*test*",
