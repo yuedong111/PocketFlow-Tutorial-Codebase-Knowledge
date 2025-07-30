@@ -850,7 +850,7 @@ Now, directly provide a super beginner-friendly Markdown output (DON'T need ```m
         write_content = []
         full_chapter_listing = item["full_chapter_listing"]
         for file_context_str in file_context_str_list:
-            if length_of_tokens(prompt_1_token)> 12000:
+            if length_of_tokens(prompt_1_token) > MAX_TOKENS * 0.5:
                 previous_chapters_summary = previous_chapters_summary[-10000:]
                 print(length_of_tokens(file_context_str), length_of_tokens(prompt_1_token), length_of_tokens(previous_chapters_summary))
             prompt = f"""
