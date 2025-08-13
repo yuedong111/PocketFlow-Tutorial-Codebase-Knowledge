@@ -109,3 +109,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# python .\main_intermediate.py --dir C:\Users\pengchencq\review_project\jstutorial  --language "Chinese"
