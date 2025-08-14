@@ -555,7 +555,7 @@ class OrderChapters(Node):
         # No language variation needed here in prompt instructions, just ordering based on structure
         # The input names might be translated, hence the note.
         prompt = f"""
-Given the following project abstractions and their relationships for the project {project_name}:
+Given the following project abstractions and their relationships for the project ```` {project_name} ````:
 
 Abstractions (Index # Name){list_lang_note}:
 {abstraction_listing}
@@ -563,19 +563,29 @@ Abstractions (Index # Name){list_lang_note}:
 Context about relationships and project summary:
 {context}
 
-If you are going to write an intermediate-level tutorial for {project_name}, what is the best order to explain these abstractions, from first to last?
+If you are going to write an intermediate-level tutorial for ```` {project_name} ````, what is the best order to explain these abstractions, from first to last?
 Start with user-facing entry points or public APIs and foundational orchestration layers.
 Then cover core services and cross-cutting modules (e.g., state, caching, messaging).
 Finally, explain lower-level utilities, adapters, and infrastructure details.
 
-Output the ordered list of abstraction indices, including the name in a comment for clarity. Use the format idx # AbstractionName.
+Output requirements (MANDATORY):
+- Return **only** a single fenced code block labeled `yaml`. No prose before or after.
+- The content **must** be a YAML **list** (not a mapping).
+- Include **exactly** one item per abstraction shown above (same count and indices).
+- Each item **must** be either:
+  - an integer index (e.g., `2`), **or**
+  - a string of the form `idx # AbstractionName` (e.g., `2 # Public API Gateway`).
+- Do **not** add any keys like `order:`; do not include comments except inline `# AbstractionName`.
+
+Format example:
+
+```yaml
 - 2 # Public API Gateway
 - 0 # Core Orchestrator
 - 1 # Domain Service (uses Orchestrator)
 - 3 # Persistence Layer
 - 4 # Adapters/Utilities
-
-Now, provide the YAML output:
+Now, provide the YAML output (fenced, and nothing else):
 """
         response = call_llm_retry(
             prompt, {"max_token": MAX_TOKENS-SPLIT_TOKENS-1000}
@@ -787,8 +797,6 @@ Complete Tutorial Structure:
 Context from previous chapters:
 {previous_chapters_summary if previous_chapters_summary else "This is the first chapter."}
 
-Relevant Code Snippets (Code itself remains unchanged):
-{file_context_str if file_context_str else "No specific code snippets provided for this abstraction."}
 
 Instructions for the chapter (Generate content in {language.capitalize()} unless specified otherwise):
 
