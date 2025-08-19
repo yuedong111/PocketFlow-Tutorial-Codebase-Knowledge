@@ -1,7 +1,11 @@
 import os
 import fnmatch
 import pathspec
+from docx import Document
 
+def extract_doc_text(path: str) -> str:
+    doc = Document(path)
+    return "\n".join(p.text.strip() for p in doc.paragraphs if p.text.strip())
 
 def crawl_local_files(
     directory,
@@ -101,7 +105,8 @@ def crawl_local_files(
                 rounded_percentage = int(percentage)
                 print(f"\033[92mProgress: {processed_files}/{total_files} ({rounded_percentage}%) {relpath} [{status}]\033[0m")
             continue # Skip to next file if not included or excluded
-
+        if not os.path.exists(filepath):
+            continue
         if max_file_size and os.path.getsize(filepath) > max_file_size:
             status = "skipped (size limit)"
             # Print progress for skipped files due to size limit
@@ -113,8 +118,18 @@ def crawl_local_files(
 
         # --- File is being processed ---        
         try:
-            with open(filepath, "r", encoding="utf-8-sig") as f:
-                content = f.read()
+            if filepath.lower().endswith(".pdf"):
+                from pypdf import PdfReader
+                reader = PdfReader(filepath)
+                all_text = []
+                for page in reader.pages:
+                    all_text.append(page.extract_text() or "")
+                content = "\n".join(all_text)
+            elif filepath.lower().endswith((".doc", ".docx")):
+                content = extract_doc_text(filepath)
+            else:
+                with open(filepath, "r", encoding="utf-8-sig") as f:
+                    content = f.read()
             files_dict[relpath] = content
         except Exception as e:
             print(f"Warning: Could not read file {filepath}: {e}")
