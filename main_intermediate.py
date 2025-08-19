@@ -10,7 +10,7 @@ dotenv.load_dotenv()
 DEFAULT_INCLUDE_PATTERNS = {
     "*.py", "*.js", "*.jsx", "*.ts", "*.tsx", "*.go", "*.java", "*.pyi", "*.pyx",
     "*.c", "*.cc", "*.cpp", "*.h", "*.md", "*.rst", "*Dockerfile",
-    "*Makefile", "*.yaml", "*.yml", "*.ipynb", "*.pdf",
+    "*Makefile", "*.yaml", "*.yml", "*.ipynb", "*.pdf", "*.doc", "*.docx",
 }
 
 DEFAULT_EXCLUDE_PATTERNS = {
@@ -111,3 +111,4 @@ if __name__ == "__main__":
     main()
 
 # python .\main_intermediate.py --dir C:\Users\pengchencq\review_project\jstutorial  --language "Chinese"
+
