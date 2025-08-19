@@ -171,7 +171,7 @@ Analyze the codebase context.
 Identify the top 5–{max_abstraction_num} core abstractions that an intermediate engineer should know first.
 
 For each abstraction, provide:
-1. A concise `name`.
+1. A concise `name`{name_lang_hint}.
 2. A precise, intermediate-level `description` (~280–320 words) that focuses on:
    - purpose and responsibilities,
    - public interface / key inputs & outputs,
@@ -187,7 +187,7 @@ Format the output as a YAML list of dictionaries:
 
 ```yaml
 - name: |
-    Query Processing
+    Query Processing{name_lang_hint}
   description: |
     What it is, why it exists, its responsibilities, key inputs/outputs,
     notable dependencies, and common pitfalls—written for an intermediate engineer.
@@ -195,7 +195,7 @@ Format the output as a YAML list of dictionaries:
     - 0 # path/to/file1.py
     - 3 # path/to/related.py
 - name: |
-    Query Optimization
+    Query Optimization{name_lang_hint}
   description: |
     What it is, when to use it, constraints, and trade-offs—no analogies, concise and technical.
   file_indices:
