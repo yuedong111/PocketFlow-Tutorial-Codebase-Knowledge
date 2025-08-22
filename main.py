@@ -20,7 +20,6 @@ DEFAULT_EXCLUDE_PATTERNS = {
     "*.venv/*",
     "*test*",
     "*tests/*",
-    "*examples/*",
     "v1/*",
     "*dist/*",
     "*build/*",
