@@ -2,7 +2,10 @@ import tiktoken, json, re, textwrap, yaml
 from typing import List, Dict, Iterable
 from langchain_openai import ChatOpenAI
 
-MAX_TOKENS = 16000
+from ebooklib import epub,  ITEM_DOCUMENT
+from bs4 import BeautifulSoup
+
+MAX_TOKENS = 32000
 SPLIT_TOKENS = MAX_TOKENS * 0.5
 
 def length_of_tokens(prompt, encoding_name: str = "cl100k_base"):
@@ -57,3 +60,15 @@ def split_prompt(
     return chunks
 
 
+def get_epub_text(path: str) -> str:
+    book = epub.read_epub(path)
+    contents = []
+
+    for item in book.get_items():
+        if item.get_type() == ITEM_DOCUMENT:  # 只处理正文内容
+            soup = BeautifulSoup(item.get_body_content(), 'html.parser')
+            text = soup.get_text()
+            contents.append(text)
+
+    full_text = "\n".join(contents)
+    return full_text
