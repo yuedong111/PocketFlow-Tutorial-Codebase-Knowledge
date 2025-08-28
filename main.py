@@ -10,12 +10,12 @@ dotenv.load_dotenv()
 DEFAULT_INCLUDE_PATTERNS = {
     "*.py", "*.js", "*.jsx", "*.ts", "*.tsx", "*.go", "*.java", "*.pyi", "*.pyx",
     "*.c", "*.cc", "*.cpp", "*.h", "*.md", "*.rst", "*Dockerfile",
-    "*Makefile", "*.yaml", "*.yml", "*.ipynb", "*.pdf", "*.doc", "*.docx",
+    "*Makefile", "*.yaml", "*.yml", "*.ipynb", "*.pdf", "*.doc", "*.docx", "*.epub",
 }
 
 DEFAULT_EXCLUDE_PATTERNS = {
     "assets/*", "data/*", "images/*", "public/*", "static/*", "temp/*",
-   # "*docs/*",
+    # "*docs/*",
     "*venv/*",
     "*.venv/*",
     "*test*",
@@ -31,7 +31,7 @@ DEFAULT_EXCLUDE_PATTERNS = {
     "*obj/*",
     "*bin/*",
     "*node_modules/*",
-    "*.log"
+    "*.log",
 }
 
 # --- Main Function ---
@@ -82,7 +82,7 @@ def main():
         "language": args.language,
         
         # Add use_cache flag (inverse of no-cache flag)
-        "use_cache": not args.no_cache,
+        "use_cache": True,
         
         # Add max_abstraction_num parameter
         "max_abstraction_num": args.max_abstractions,
