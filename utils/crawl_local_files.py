@@ -2,6 +2,7 @@ import os
 import fnmatch
 import pathspec
 from docx import Document
+from utils.tools import get_epub_text
 
 def extract_doc_text(path: str) -> str:
     doc = Document(path)
@@ -59,7 +60,7 @@ def crawl_local_files(
                     if fnmatch.fnmatch(dirpath_rel, pattern) or fnmatch.fnmatch(d, pattern):
                         excluded_dirs.add(d)
                         break
-
+     
         for d in dirs.copy():
             if d in excluded_dirs:
                 dirs.remove(d)
@@ -114,7 +115,7 @@ def crawl_local_files(
                 percentage = (processed_files / total_files) * 100
                 rounded_percentage = int(percentage)
                 print(f"\033[92mProgress: {processed_files}/{total_files} ({rounded_percentage}%) {relpath} [{status}]\033[0m")
-            continue # Skip large files
+            # continue # Skip large files
 
         # --- File is being processed ---        
         try:
@@ -127,6 +128,8 @@ def crawl_local_files(
                 content = "\n".join(all_text)
             elif filepath.lower().endswith((".doc", ".docx")):
                 content = extract_doc_text(filepath)
+            elif filepath.lower().endswith(".epub"):
+                content = get_epub_text(filepath)
             else:
                 with open(filepath, "r", encoding="utf-8-sig") as f:
                     content = f.read()
