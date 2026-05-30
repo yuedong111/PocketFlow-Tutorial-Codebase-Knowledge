@@ -20,7 +20,6 @@ This is a tutorial project of [Pocket Flow](https://github.com/The-Pocket/Pocket
 
 &nbsp;&nbsp;**🔸 🎉 Reached Hacker News Front Page** (April 2025) with >900 up‑votes:  [Discussion »](https://news.ycombinator.com/item?id=43739456)
 
-&nbsp;&nbsp;**🔸 🎊 Online Service Now Live!** (May&nbsp;2025) Try our new online version at [https://code2tutorial.com/](https://code2tutorial.com/) – just paste a GitHub link, no installation needed!
 
 ## ⭐ Example Results for Popular GitHub Repositories!
 
