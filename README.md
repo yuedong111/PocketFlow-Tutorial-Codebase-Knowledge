@@ -139,6 +139,30 @@ python main.py --file /path/to/textbook.md --language "Chinese" \
   --min-chunk-tokens 2000 --max-chunk-tokens 8000
 ```
 
+#### Normalize converted Markdown headings
+
+Some converted Markdown files, especially files produced from PDF/Word sources, mark every detected heading as `##`. This makes chapter boundaries hard to detect. Use the standalone normalizer before running document mode:
+
+```bash
+python scripts/normalize_markdown_headings.py /path/to/book.md \
+  -o /path/to/book.normalized.md \
+  --drop-leading-toc \
+  --title "Book Title"
+
+python main.py --file /path/to/book.normalized.md --language "Chinese"
+```
+
+The script learns the chapter pattern from the first valid `##` heading, then restores a standard hierarchy:
+
+```markdown
+# Book Title
+## Chapter 1 ...
+### 1.1 ...
+#### 1.1.1 ...
+```
+
+It supports common chapter forms such as `第 1 章`, `Chapter 1`, `Chap. 1`, `Ch. 1`, and numbered headings like `1 Introduction`. Use `--dry-run` to preview the normalization summary without writing a file, and omit `--title` if the document should not get a top-level `#` title.
+
 Tip: for very large books, increasing `--max-chunk-tokens` produces fewer, larger sections (fewer LLM calls); decreasing it produces finer-grained sections.
 
 
@@ -204,6 +228,5 @@ To run this project in a Docker container, you'll need to pass your API keys as 
   </a>
 </div>
 <br>
-
 
 

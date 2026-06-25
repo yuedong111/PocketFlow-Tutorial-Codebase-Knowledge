@@ -43,11 +43,11 @@ def create_book_tutorial_flow():
 
     # Instantiate nodes
     split_document = SplitDocument(max_retries=2, wait=5)
-    summarize_chunks = SummarizeChunks(max_retries=5, wait=20)  # BatchNode
-    identify_abstractions = IdentifyAbstractions(max_retries=5, wait=20)
-    analyze_relationships = AnalyzeRelationships(max_retries=5, wait=20)
-    order_chapters = OrderChapters(max_retries=5, wait=20)
-    write_chapters = WriteChapters(max_retries=5, wait=20)  # BatchNode
+    summarize_chunks = SummarizeChunks(max_retries=2, wait=20)  # BatchNode
+    identify_abstractions = IdentifyAbstractions(max_retries=2, wait=20)
+    analyze_relationships = AnalyzeRelationships(max_retries=2, wait=20)
+    order_chapters = OrderChapters(max_retries=2, wait=20)
+    write_chapters = WriteChapters(max_retries=2, wait=20)  # BatchNode
     combine_tutorial = CombineTutorial()
 
     # Connect nodes in sequence
