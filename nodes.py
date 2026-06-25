@@ -171,6 +171,18 @@ Write a clear summary of this section in **around 300 words**. The summary shoul
         )
         return {"index": item["index"], "path": item["path"], "summary": summary.strip()}
 
+    def exec_fallback(self, item, exc):
+        # Don't let one flaky section abort a long multi-section run. Fall back to
+        # a truncated excerpt of the original text so the pipeline can continue.
+        print(
+            f"Warning: summarization failed for section {item['index']} ({item['path']}): {exc}. "
+            f"Falling back to a truncated excerpt."
+        )
+        excerpt = item["content"].strip().replace("\n", " ")
+        if len(excerpt) > 1500:
+            excerpt = excerpt[:1500] + "..."
+        return {"index": item["index"], "path": item["path"], "summary": excerpt}
+
     def post(self, shared, prep_res, exec_res_list):
         summaries = {res["index"]: res["summary"] for res in exec_res_list}
         shared["summaries"] = summaries
