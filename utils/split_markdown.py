@@ -219,6 +219,12 @@ def _add_segment(breadcrumb, content, segments):
     segments.append({"breadcrumb": location, "content": content})
 
 
+def _first_heading_level(text):
+    """Return the ATX level of the first heading in text, or None."""
+    m = re.search(r"^(#{1,6})\s+.*\S\s*$", text, re.MULTILINE)
+    return len(m.group(1)) if m else None
+
+
 def split_markdown_by_headings(content, min_tokens=1500, max_tokens=10000):
     """Split a large markdown document into balanced, structure-aware segments.
 
@@ -245,8 +251,14 @@ def split_markdown_by_headings(content, min_tokens=1500, max_tokens=10000):
     # as long as the combined size stays within max_tokens.
     compacted = []
     for seg in merged:
+        first_heading_level = _first_heading_level(seg["content"])
+        # In normalized book/report Markdown, H2 is the chapter level. Keep
+        # chapter starts visible instead of absorbing them into the previous
+        # chapter just because the intro is short.
+        starts_chapter = first_heading_level == 2
         if (
             compacted
+            and not starts_chapter
             and estimate_tokens(seg["content"]) < min_tokens
             and estimate_tokens(compacted[-1]["content"] + seg["content"]) <= max_tokens
         ):
@@ -256,6 +268,10 @@ def split_markdown_by_headings(content, min_tokens=1500, max_tokens=10000):
     # A leading tiny segment can't merge backwards; fold it into the next one.
     if (
         len(compacted) >= 2
+        and not (
+            (_first_heading_level(compacted[0]["content"]) is not None)
+            and _first_heading_level(compacted[0]["content"]) == 2
+        )
         and estimate_tokens(compacted[0]["content"]) < min_tokens
         and estimate_tokens(compacted[0]["content"] + compacted[1]["content"]) <= max_tokens
     ):

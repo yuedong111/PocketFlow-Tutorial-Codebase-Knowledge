@@ -119,8 +119,8 @@ This is a tutorial project of [Pocket Flow](https://github.com/The-Pocket/Pocket
     - `-s, --max-size` - Maximum file size in bytes (default: 100KB)
     - `--language` - Language for the generated tutorial (default: "english")
     - `--max-abstractions` - Maximum number of core concepts (chapters) for the whole input. Default: 10 for codebases; auto-scaled with document size in `--file` mode
-    - `--min-chunk-tokens` - Minimum approx. tokens per section in document mode (default: 1500)
-    - `--max-chunk-tokens` - Maximum approx. tokens per section in document mode (default: 10000)
+    - `--min-chunk-tokens` - Minimum approx. tokens per section in document mode (default: 1500). Tiny sections below this size may be merged with a neighbor.
+    - `--max-chunk-tokens` - Maximum approx. tokens per section in document mode (default: 10000). Oversized sections above this size are split into smaller pieces.
     - `--no-cache` - Disable LLM response caching (default: caching enabled)
 
 The application will crawl the repository, analyze the codebase structure, generate tutorial content in the specified language, and save the output in the specified directory (default: ./output).
@@ -162,6 +162,17 @@ The script learns the chapter pattern from the first valid `##` heading, then re
 ```
 
 It supports common chapter forms such as `第 1 章`, `Chapter 1`, `Chap. 1`, `Ch. 1`, and numbered headings like `1 Introduction`. Use `--dry-run` to preview the normalization summary without writing a file, and omit `--title` if the document should not get a top-level `#` title.
+
+#### Chunk size options
+
+Document mode cuts one large Markdown file into smaller chunks before sending them to the LLM. The chunk-size options control how big those pieces should be:
+
+- `--max-chunk-tokens`: "too big, split it." If a chapter or section is larger than this value, the splitter breaks it into smaller chunks so it fits in the LLM context.
+- `--min-chunk-tokens`: "too small, merge it." If a section is smaller than this value, the splitter may merge it with a nearby section to avoid wasting an LLM call on a tiny piece.
+
+For example, if a section has only 600 tokens and `--min-chunk-tokens` is `1500`, it may be merged with a neighbor. If a chapter has 30000 tokens and `--max-chunk-tokens` is `10000`, it will be split into multiple chunks.
+
+In normalized book Markdown, `##` chapter headings are kept as visible chunk starts even when their intro text is short; smaller headings such as `###` and `####` may still be merged.
 
 Tip: for very large books, increasing `--max-chunk-tokens` produces fewer, larger sections (fewer LLM calls); decreasing it produces finer-grained sections.
 
@@ -228,5 +239,4 @@ To run this project in a Docker container, you'll need to pass your API keys as 
   </a>
 </div>
 <br>
-
 
