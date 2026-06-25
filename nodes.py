@@ -5,6 +5,7 @@ from pocketflow import Node, BatchNode
 from utils.crawl_github_files import crawl_github_files
 from utils.call_llm import call_llm
 from utils.crawl_local_files import crawl_local_files
+from utils.split_markdown import split_markdown_by_headings
 
 
 # Helper to get content for specific file indices
@@ -81,20 +82,132 @@ class FetchRepo(Node):
         shared["files"] = exec_res  # List of (path, content) tuples
 
 
+class SplitDocument(Node):
+    """Reads a single large markdown document (book/report) and splits it into
+    balanced, structure-aware virtual files based on its heading hierarchy."""
+
+    def prep(self, shared):
+        doc_path = shared.get("doc_path")
+        project_name = shared.get("project_name")
+
+        if not project_name:
+            project_name = os.path.splitext(os.path.basename(doc_path))[0]
+            shared["project_name"] = project_name
+
+        return {
+            "doc_path": doc_path,
+            "min_chunk_tokens": shared.get("min_chunk_tokens", 1500),
+            "max_chunk_tokens": shared.get("max_chunk_tokens", 10000),
+        }
+
+    def exec(self, prep_res):
+        doc_path = prep_res["doc_path"]
+        print(f"Reading document: {doc_path}...")
+        with open(doc_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        files_list = split_markdown_by_headings(
+            content,
+            min_tokens=prep_res["min_chunk_tokens"],
+            max_tokens=prep_res["max_chunk_tokens"],
+        )
+        if len(files_list) == 0:
+            raise ValueError("Failed to split document into any sections")
+        print(f"Split document into {len(files_list)} sections (virtual files).")
+        return files_list
+
+    def post(self, shared, prep_res, exec_res):
+        shared["files"] = exec_res  # List of (virtual_path, content) tuples
+
+
+class SummarizeChunks(BatchNode):
+    """Generates a concise (~300 word) summary for each virtual file. These
+    summaries are used by the topic-identification and relationship stages so the
+    whole document fits in the LLM context, while the original text is preserved
+    for chapter writing."""
+
+    def prep(self, shared):
+        files_data = shared["files"]
+        project_name = shared["project_name"]
+        language = shared.get("language", "english")
+        use_cache = shared.get("use_cache", True)
+
+        items = []
+        for i, (path, content) in enumerate(files_data):
+            items.append(
+                {
+                    "index": i,
+                    "path": path,
+                    "content": content,
+                    "project_name": project_name,
+                    "language": language,
+                    "use_cache": use_cache,
+                }
+            )
+        print(f"Preparing to summarize {len(items)} sections...")
+        return items
+
+    def exec(self, item):
+        language = item.get("language", "english")
+        print(f"Summarizing section {item['index']}: {item['path']}...")
+
+        language_instruction = ""
+        if language.lower() != "english":
+            language_instruction = (
+                f"IMPORTANT: Write the summary in **{language.capitalize()}** language.\n\n"
+            )
+
+        prompt = f"""{language_instruction}You are summarizing one section of the document `{item['project_name']}`.
+
+Section path: {item['path']}
+
+Section content:
+{item['content']}
+
+Write a clear summary of this section in **around 300 words**. The summary should capture the section's main ideas, key concepts, important terms, and conclusions, so that someone can understand what this section covers without reading the full text. Output only the summary text, no headings or preamble."""
+
+        summary = call_llm(
+            prompt, use_cache=(item.get("use_cache", True) and self.cur_retry == 0)
+        )
+        return {"index": item["index"], "path": item["path"], "summary": summary.strip()}
+
+    def post(self, shared, prep_res, exec_res_list):
+        summaries = {res["index"]: res["summary"] for res in exec_res_list}
+        shared["summaries"] = summaries
+        print(f"Finished summarizing {len(summaries)} sections.")
+
+
 class IdentifyAbstractions(Node):
     def prep(self, shared):
         files_data = shared["files"]
         project_name = shared["project_name"]  # Get project name
         language = shared.get("language", "english")  # Get language
         use_cache = shared.get("use_cache", True)  # Get use_cache flag, default to True
-        max_abstraction_num = shared.get("max_abstraction_num", 10)  # Get max_abstraction_num, default to 10
+        max_abstraction_num = shared.get("max_abstraction_num")  # None = auto-decide
+        summaries = shared.get("summaries")  # Optional: section summaries (book/report mode)
 
-        # Helper to create context from files, respecting limits (basic example)
+        # Decide how many abstractions to identify. This is always a WHOLE-document
+        # cap (the LLM picks the top concepts across the entire input in one pass),
+        # never per-section. For a single large document the flat codebase default
+        # of 10 is too coarse, so scale the cap with the number of sections.
+        if max_abstraction_num is None:
+            if summaries:  # document/book mode
+                num_sections = len(files_data)
+                # Roughly one chapter per ~3 sections, bounded to a sane range.
+                max_abstraction_num = max(10, min(50, -(-num_sections // 3)))
+            else:  # codebase mode keeps the original default
+                max_abstraction_num = 10
+            shared["max_abstraction_num"] = max_abstraction_num  # Record resolved value
+
+        # Helper to create context from files. When summaries are available
+        # (large-document mode), use the compact summaries instead of the full
+        # text so the whole document fits in the LLM context.
         def create_llm_context(files_data):
             context = ""
             file_info = []  # Store tuples of (index, path)
             for i, (path, content) in enumerate(files_data):
-                entry = f"--- File Index {i}: {path} ---\n{content}\n\n"
+                text = summaries[i] if summaries and i in summaries else content
+                entry = f"--- File Index {i}: {path} ---\n{text}\n\n"
                 context += entry
                 file_info.append((i, path))
 
@@ -113,6 +226,7 @@ class IdentifyAbstractions(Node):
             language,
             use_cache,
             max_abstraction_num,
+            shared.get("content_label", "codebase"),
         )  # Return all parameters
 
     def exec(self, prep_res):
@@ -124,8 +238,19 @@ class IdentifyAbstractions(Node):
             language,
             use_cache,
             max_abstraction_num,
+            content_label,
         ) = prep_res  # Unpack all parameters
         print(f"Identifying abstractions using LLM...")
+
+        # Scale the lower bound for documents so a large book isn't collapsed into
+        # just a handful of concepts; codebases keep the original lower bound of 5.
+        if content_label != "codebase":
+            min_abstraction_num = max(5, round(max_abstraction_num * 0.6))
+        else:
+            min_abstraction_num = 5
+        print(
+            f"Targeting {min_abstraction_num}-{max_abstraction_num} abstractions for the whole {content_label}."
+        )
 
         # Add language instruction and hints only if not English
         language_instruction = ""
@@ -140,11 +265,11 @@ class IdentifyAbstractions(Node):
         prompt = f"""
 For the project `{project_name}`:
 
-Codebase Context:
+{content_label.capitalize()} Context:
 {context}
 
-{language_instruction}Analyze the codebase context.
-Identify the top 5-{max_abstraction_num} core most important abstractions to help those new to the codebase.
+{language_instruction}Analyze the {content_label} context.
+Identify the top {min_abstraction_num}-{max_abstraction_num} core most important abstractions to help those new to the {content_label}.
 
 For each abstraction, provide:
 1. A concise `name`{name_lang_hint}.
@@ -246,6 +371,7 @@ class AnalyzeRelationships(Node):
         project_name = shared["project_name"]  # Get project name
         language = shared.get("language", "english")  # Get language
         use_cache = shared.get("use_cache", True)  # Get use_cache flag, default to True
+        summaries = shared.get("summaries")  # Optional: section summaries (book/report mode)
 
         # Get the actual number of abstractions directly
         num_abstractions = len(abstractions)
@@ -266,10 +392,18 @@ class AnalyzeRelationships(Node):
             all_relevant_indices.update(abstr["files"])
 
         context += "\\nRelevant File Snippets (Referenced by Index and Path):\\n"
-        # Get content for relevant files using helper
-        relevant_files_content_map = get_content_for_indices(
-            files_data, sorted(list(all_relevant_indices))
-        )
+        # Get content for relevant files using helper. In large-document mode use
+        # the compact summaries instead of full text to stay within context.
+        if summaries:
+            relevant_files_content_map = {}
+            for i in sorted(list(all_relevant_indices)):
+                if 0 <= i < len(files_data) and i in summaries:
+                    path = files_data[i][0]
+                    relevant_files_content_map[f"{i} # {path}"] = summaries[i]
+        else:
+            relevant_files_content_map = get_content_for_indices(
+                files_data, sorted(list(all_relevant_indices))
+            )
         # Format file content for context
         file_context_str = "\\n\\n".join(
             f"--- File: {idx_path} ---\\n{content}"
@@ -284,6 +418,7 @@ class AnalyzeRelationships(Node):
             project_name,
             language,
             use_cache,
+            shared.get("content_label", "codebase"),
         )  # Return use_cache
 
     def exec(self, prep_res):
@@ -294,6 +429,7 @@ class AnalyzeRelationships(Node):
             project_name,
             language,
             use_cache,
+            content_label,
          ) = prep_res  # Unpack use_cache
         print(f"Analyzing relationships using LLM...")
 
@@ -307,12 +443,12 @@ class AnalyzeRelationships(Node):
             list_lang_note = f" (Names might be in {language.capitalize()})"  # Note for the input list
 
         prompt = f"""
-Based on the following abstractions and relevant code snippets from the project `{project_name}`:
+Based on the following abstractions and relevant snippets from the {content_label} `{project_name}`:
 
 List of Abstraction Indices and Names{list_lang_note}:
 {abstraction_listing}
 
-Context (Abstractions, Descriptions, Code):
+Context (Abstractions, Descriptions, Content):
 {context}
 
 {language_instruction}Please provide:
@@ -321,7 +457,7 @@ Context (Abstractions, Descriptions, Code):
     - `from_abstraction`: Index of the source abstraction (e.g., `0 # AbstractionName1`)
     - `to_abstraction`: Index of the target abstraction (e.g., `1 # AbstractionName2`)
     - `label`: A brief label for the interaction **in just a few words**{lang_hint} (e.g., "Manages", "Inherits", "Uses").
-    Ideally the relationship should be backed by one abstraction calling or passing parameters to another.
+    Ideally the relationship should be backed by one abstraction building on, referencing, or depending on another.
     Simplify the relationship and exclude those non-important ones.
 
 IMPORTANT: Make sure EVERY abstraction is involved in at least ONE relationship (either as source or target). Each abstraction index must appear at least once across all relationships.
@@ -616,6 +752,7 @@ class WriteChapters(BatchNode):
                         "next_chapter": next_chapter,  # Add next chapter info (uses potentially translated name)
                         "language": language,  # Add language for multi-language support
                         "use_cache": use_cache, # Pass use_cache flag
+                        "content_label": shared.get("content_label", "codebase"),
                         # previous_chapters_summary will be added dynamically in exec
                     }
                 )
@@ -639,6 +776,8 @@ class WriteChapters(BatchNode):
         project_name = item.get("project_name")
         language = item.get("language", "english")
         use_cache = item.get("use_cache", True) # Read use_cache from item
+        content_label = item.get("content_label", "codebase")
+        is_code = content_label == "codebase"
         print(f"Writing chapter {chapter_num} for: {abstraction_name} using LLM...")
 
         # Prepare file context string from the map
@@ -675,6 +814,23 @@ class WriteChapters(BatchNode):
             )
             tone_note = f" (appropriate for {lang_cap} readers)"
 
+        # Mode-dependent wording: code-oriented for codebases, content-oriented
+        # for books/reports/documents.
+        if is_code:
+            snippets_header = "Relevant Code Snippets (Code itself remains unchanged):"
+            no_snippets_text = "No specific code snippets provided for this abstraction."
+            use_case_instr = f"- Explain how to use this abstraction to solve the use case{instruction_lang_note}. Give example inputs and outputs for code snippets (if the output isn't values, describe at a high level what will happen{instruction_lang_note})."
+            block_instr = f"- Each code block should be BELOW 10 lines! If longer code blocks are needed, break them down into smaller pieces and walk through them one-by-one. Aggresively simplify the code to make it minimal. Use comments{code_comment_note} to skip non-important implementation details. Each code block should have a beginner friendly explanation right after it{instruction_lang_note}."
+            internal_instr = f"- Describe the internal implementation to help understand what's under the hood{instruction_lang_note}. First provide a non-code or code-light walkthrough on what happens step-by-step when the abstraction is called{instruction_lang_note}. It's recommended to use a simple sequenceDiagram with a dummy example - keep it minimal with at most 5 participants to ensure clarity. If participant name has space, use: `participant QP as Query Processing`. {mermaid_lang_note}."
+            deeper_instr = f"- Then dive deeper into code for the internal implementation with references to files. Provide example code blocks, but make them similarly simple and beginner-friendly. Explain{instruction_lang_note}."
+        else:
+            snippets_header = "Relevant Excerpts from the Source Material (Quoted text remains unchanged):"
+            no_snippets_text = "No specific excerpts provided for this concept."
+            use_case_instr = f"- Explain how this concept helps address the use case{instruction_lang_note}. Give concrete examples; if it isn't a numeric result, describe at a high level what happens or what the reader should take away{instruction_lang_note}."
+            block_instr = f"- When quoting from the source material, keep each quote SHORT (a few lines). If a longer passage is needed, break it into smaller pieces and walk through them one-by-one. Each quote should have a beginner-friendly explanation right after it{instruction_lang_note}."
+            internal_instr = f"- Explain what is going on beneath the surface{instruction_lang_note}. First give a non-technical, step-by-step walkthrough of how the idea unfolds or is applied{instruction_lang_note}. It's recommended to use a simple sequenceDiagram or flowchart with a dummy example - keep it minimal with at most 5 participants to ensure clarity. If a participant name has a space, use: `participant QP as Query Processing`. {mermaid_lang_note}."
+            deeper_instr = f"- Then go deeper into the details with references to the relevant sections. Provide further examples, but keep them simple and beginner-friendly. Explain{instruction_lang_note}."
+
         prompt = f"""
 {language_instruction}Write a very beginner-friendly tutorial chapter (in Markdown format) for the project `{project_name}` about the concept: "{abstraction_name}". This is Chapter {chapter_num}.
 
@@ -689,8 +845,8 @@ Complete Tutorial Structure{structure_note}:
 Context from previous chapters{prev_summary_note}:
 {previous_chapters_summary if previous_chapters_summary else "This is the first chapter."}
 
-Relevant Code Snippets (Code itself remains unchanged):
-{file_context_str if file_context_str else "No specific code snippets provided for this abstraction."}
+{snippets_header}
+{file_context_str if file_context_str else no_snippets_text}
 
 Instructions for the chapter (Generate content in {language.capitalize()} unless specified otherwise):
 - Start with a clear heading (e.g., `# Chapter {chapter_num}: {abstraction_name}`). Use the provided concept name.
@@ -701,13 +857,13 @@ Instructions for the chapter (Generate content in {language.capitalize()} unless
 
 - If the abstraction is complex, break it down into key concepts. Explain each concept one-by-one in a very beginner-friendly way{instruction_lang_note}.
 
-- Explain how to use this abstraction to solve the use case{instruction_lang_note}. Give example inputs and outputs for code snippets (if the output isn't values, describe at a high level what will happen{instruction_lang_note}).
+{use_case_instr}
 
-- Each code block should be BELOW 10 lines! If longer code blocks are needed, break them down into smaller pieces and walk through them one-by-one. Aggresively simplify the code to make it minimal. Use comments{code_comment_note} to skip non-important implementation details. Each code block should have a beginner friendly explanation right after it{instruction_lang_note}.
+{block_instr}
 
-- Describe the internal implementation to help understand what's under the hood{instruction_lang_note}. First provide a non-code or code-light walkthrough on what happens step-by-step when the abstraction is called{instruction_lang_note}. It's recommended to use a simple sequenceDiagram with a dummy example - keep it minimal with at most 5 participants to ensure clarity. If participant name has space, use: `participant QP as Query Processing`. {mermaid_lang_note}.
+{internal_instr}
 
-- Then dive deeper into code for the internal implementation with references to files. Provide example code blocks, but make them similarly simple and beginner-friendly. Explain{instruction_lang_note}.
+{deeper_instr}
 
 - IMPORTANT: When you need to refer to other core abstractions covered in other chapters, ALWAYS use proper Markdown links like this: [Chapter Title](filename.md). Use the Complete Tutorial Structure above to find the correct filename and the chapter title{link_lang_note}. Translate the surrounding text.
 
@@ -803,7 +959,10 @@ class CombineTutorial(Node):
         index_content = f"# Tutorial: {project_name}\n\n"
         index_content += f"{relationships_data['summary']}\n\n"  # Use the potentially translated summary directly
         # Keep fixed strings in English
-        index_content += f"**Source Repository:** [{repo_url}]({repo_url})\n\n"
+        source_ref = shared.get("repo_url") or shared.get("doc_path")
+        if source_ref:
+            label = "Source Repository" if shared.get("repo_url") else "Source Document"
+            index_content += f"**{label}:** [{source_ref}]({source_ref})\n\n"
 
         # Add Mermaid diagram for relationships (diagram itself uses potentially translated names/labels)
         index_content += "```mermaid\n"

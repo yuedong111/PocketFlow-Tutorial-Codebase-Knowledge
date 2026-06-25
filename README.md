@@ -103,22 +103,43 @@ This is a tutorial project of [Pocket Flow](https://github.com/The-Pocket/Pocket
     # Or, analyze a local directory
     python main.py --dir /path/to/your/codebase --include "*.py" --exclude "*test*"
 
+    # Or, turn a single large Markdown document (book/report) into a tutorial
+    python main.py --file /path/to/book.md --language "Chinese"
+
     # Or, generate a tutorial in Chinese
     python main.py --repo https://github.com/username/repo --language "Chinese"
     ```
 
-    - `--repo` or `--dir` - Specify either a GitHub repo URL or a local directory path (required, mutually exclusive)
-    - `-n, --name` - Project name (optional, derived from URL/directory if omitted)
+    - `--repo`, `--dir`, or `--file` - Specify a GitHub repo URL, a local directory, or a single large Markdown document (required, mutually exclusive)
+    - `-n, --name` - Project name (optional, derived from URL/directory/file if omitted)
     - `-t, --token` - GitHub token (or set GITHUB_TOKEN environment variable)
     - `-o, --output` - Output directory (default: ./output)
     - `-i, --include` - Files to include (e.g., "`*.py`" "`*.js`")
     - `-e, --exclude` - Files to exclude (e.g., "`tests/*`" "`docs/*`")
     - `-s, --max-size` - Maximum file size in bytes (default: 100KB)
     - `--language` - Language for the generated tutorial (default: "english")
-    - `--max-abstractions` - Maximum number of abstractions to identify (default: 10)
+    - `--max-abstractions` - Maximum number of core concepts (chapters) for the whole input. Default: 10 for codebases; auto-scaled with document size in `--file` mode
+    - `--min-chunk-tokens` - Minimum approx. tokens per section in document mode (default: 1500)
+    - `--max-chunk-tokens` - Maximum approx. tokens per section in document mode (default: 10000)
     - `--no-cache` - Disable LLM response caching (default: caching enabled)
 
 The application will crawl the repository, analyze the codebase structure, generate tutorial content in the specified language, and save the output in the specified directory (default: ./output).
+
+### 📖 Document mode (books & reports)
+
+Besides codebases, you can point the tool at a **single large Markdown document** such as a textbook, technical report, or whitepaper using `--file`. Instead of crawling source files, it:
+
+1. **Splits** the document into structure-aware "virtual files" based on its heading hierarchy (`#`, `##`, `###`). Oversized chapters are recursively broken down and tiny sections are merged, so each piece stays within a target token range. Each piece keeps a breadcrumb (e.g. `Chapter 2 > 2.1 Entropy`) so it never loses its place in the document.
+2. **Summarizes** each section (~300 words) so the whole document fits in the LLM context during topic identification and relationship analysis, while the original text is preserved for writing detailed chapters.
+3. Reuses the same pipeline to identify core concepts, order them, and write beginner-friendly tutorial chapters.
+
+```bash
+# Generate a tutorial from a textbook, with custom section sizing
+python main.py --file /path/to/textbook.md --language "Chinese" \
+  --min-chunk-tokens 2000 --max-chunk-tokens 8000
+```
+
+Tip: for very large books, increasing `--max-chunk-tokens` produces fewer, larger sections (fewer LLM calls); decreasing it produces finer-grained sections.
 
 
 <details>
@@ -155,6 +176,16 @@ To run this project in a Docker container, you'll need to pass your API keys as 
      -v "/path/to/your/local_codebase":/app/code_to_analyze \
      -v "$(pwd)/output_tutorials":/app/output \
      pocketflow-app --dir /app/code_to_analyze
+   ```
+
+   **Example for turning a single Markdown document (book/report) into a tutorial:**
+
+   ```bash
+   docker run -it --rm \
+     -e GEMINI_API_KEY="YOUR_GEMINI_API_KEY_HERE" \
+     -v "/path/to/your/docs":/app/docs \
+     -v "$(pwd)/output_tutorials":/app/output \
+     pocketflow-app --file /app/docs/book.md
    ```
 </details>
 
