@@ -263,7 +263,8 @@ class IdentifyAbstractions(Node):
         print(
             f"Targeting {min_abstraction_num}-{max_abstraction_num} abstractions for the whole {content_label}."
         )
-
+        # min_abstraction_num = 10
+        # max_abstraction_num = 20
         # Add language instruction and hints only if not English
         language_instruction = ""
         name_lang_hint = ""
@@ -829,22 +830,40 @@ class WriteChapters(BatchNode):
         # Mode-dependent wording: code-oriented for codebases, content-oriented
         # for books/reports/documents.
         if is_code:
+            tutorial_subject = f"the project `{project_name}`"
+            concept_kind = "abstraction"
             snippets_header = "Relevant Code Snippets (Code itself remains unchanged):"
             no_snippets_text = "No specific code snippets provided for this abstraction."
+            motivation_instr = f"- Begin with a high-level motivation explaining what problem this abstraction solves{instruction_lang_note}. Start with a central use case as a concrete example. The whole chapter should guide the reader to understand how to solve this use case. Make it very minimal and friendly to beginners."
+            breakdown_instr = f"- If the abstraction is complex, break it down into key concepts. Explain each concept one-by-one in a very beginner-friendly way{instruction_lang_note}."
             use_case_instr = f"- Explain how to use this abstraction to solve the use case{instruction_lang_note}. Give example inputs and outputs for code snippets (if the output isn't values, describe at a high level what will happen{instruction_lang_note})."
-            block_instr = f"- Each code block should be BELOW 10 lines! If longer code blocks are needed, break them down into smaller pieces and walk through them one-by-one. Aggresively simplify the code to make it minimal. Use comments{code_comment_note} to skip non-important implementation details. Each code block should have a beginner friendly explanation right after it{instruction_lang_note}."
+            block_instr = f"- Each code block should be BELOW 10 lines! If longer code blocks are needed, break them down into smaller pieces and walk through them one-by-one. Aggressively simplify the code to make it minimal. Use comments{code_comment_note} to skip non-important implementation details. Each code block should have a beginner friendly explanation right after it{instruction_lang_note}."
             internal_instr = f"- Describe the internal implementation to help understand what's under the hood{instruction_lang_note}. First provide a non-code or code-light walkthrough on what happens step-by-step when the abstraction is called{instruction_lang_note}. It's recommended to use a simple sequenceDiagram with a dummy example - keep it minimal with at most 5 participants to ensure clarity. If participant name has space, use: `participant QP as Query Processing`. {mermaid_lang_note}."
             deeper_instr = f"- Then dive deeper into code for the internal implementation with references to files. Provide example code blocks, but make them similarly simple and beginner-friendly. Explain{instruction_lang_note}."
+            grounding_instr = ""
+            reference_instr = f"- IMPORTANT: When you need to refer to other core abstractions covered in other chapters, ALWAYS use proper Markdown links like this: [Chapter Title](filename.md). Use the Complete Tutorial Structure above to find the correct filename and the chapter title{link_lang_note}. Translate the surrounding text."
+            diagram_instr = f"- Use mermaid diagrams to illustrate complex concepts (```mermaid``` format). {mermaid_lang_note}."
+            check_understanding_instr = ""
+            ending_instr = f"- End the chapter with a brief conclusion that summarizes what was learned{instruction_lang_note} and provides a transition to the next chapter{instruction_lang_note}. If there is a next chapter, use a proper Markdown link: [Next Chapter Title](next_chapter_filename){link_lang_note}."
         else:
+            tutorial_subject = f"the source material `{project_name}`"
+            concept_kind = "concept"
             snippets_header = "Relevant Excerpts from the Source Material (Quoted text remains unchanged):"
             no_snippets_text = "No specific excerpts provided for this concept."
-            use_case_instr = f"- Explain how this concept helps address the use case{instruction_lang_note}. Give concrete examples; if it isn't a numeric result, describe at a high level what happens or what the reader should take away{instruction_lang_note}."
-            block_instr = f"- When quoting from the source material, keep each quote SHORT (a few lines). If a longer passage is needed, break it into smaller pieces and walk through them one-by-one. Each quote should have a beginner-friendly explanation right after it{instruction_lang_note}."
-            internal_instr = f"- Explain what is going on beneath the surface{instruction_lang_note}. First give a non-technical, step-by-step walkthrough of how the idea unfolds or is applied{instruction_lang_note}. It's recommended to use a simple sequenceDiagram or flowchart with a dummy example - keep it minimal with at most 5 participants to ensure clarity. If a participant name has a space, use: `participant QP as Query Processing`. {mermaid_lang_note}."
-            deeper_instr = f"- Then go deeper into the details with references to the relevant sections. Provide further examples, but keep them simple and beginner-friendly. Explain{instruction_lang_note}."
+            motivation_instr = f"- Begin with a high-level motivation explaining what question this concept helps the reader answer{instruction_lang_note}. Start with one central learning question or reading problem as a concrete example. The whole chapter should guide the reader toward a clear takeaway, not just summarize the source material."
+            breakdown_instr = f"- If the concept is complex, break it down into its key ideas, assumptions, examples, and consequences. Explain each part one-by-one in a very beginner-friendly way{instruction_lang_note}."
+            use_case_instr = f"- Explain how this concept helps the reader understand the surrounding chapter, argument, or lesson{instruction_lang_note}. Give concrete examples; if there is no numeric result, describe what changes in the reader's understanding{instruction_lang_note}."
+            block_instr = f"- When quoting from the source material, keep each quote SHORT (a few lines). If a longer passage is needed, break it into smaller quotes and walk through them one-by-one. Each quote should have a beginner-friendly explanation right after it{instruction_lang_note}. Do not over-quote; paraphrase and teach in your own words."
+            internal_instr = f"- Explain the reasoning chain behind the concept{instruction_lang_note}. First give a non-technical, step-by-step walkthrough of how the idea unfolds in the source material: the question, the author's explanation, the example or evidence, and the conclusion. Use a simple flowchart, concept map, or cause-effect diagram when helpful. Avoid forcing a sequenceDiagram unless the source material describes an actual process. {mermaid_lang_note}."
+            deeper_instr = f"- Then go deeper into the details with references to the relevant excerpts or sections. Connect definitions, examples, and implications. Point out common misunderstandings, but keep the explanation simple and beginner-friendly{instruction_lang_note}."
+            grounding_instr = f"- Ground the explanation in the provided source excerpts{instruction_lang_note}. Do not introduce unsupported claims as if they came from the material. If you use an external analogy or everyday example, make clear that it is only a teaching aid."
+            reference_instr = f"- IMPORTANT: When you need to refer to other concepts covered in other chapters, ALWAYS use proper Markdown links like this: [Chapter Title](filename.md). Use the Complete Tutorial Structure above to find the correct filename and the chapter title{link_lang_note}. Translate the surrounding text."
+            diagram_instr = f"- Use mermaid flowcharts, concept maps, or cause-effect diagrams to illustrate complex ideas when helpful (```mermaid``` format). {mermaid_lang_note}."
+            check_understanding_instr = f"- Before the conclusion, include a short `## Check Your Understanding` section with 2-3 reflection questions{instruction_lang_note}. The questions should help readers test whether they understand the concept, not ask for rote memorization."
+            ending_instr = f"- End the chapter with a brief conclusion that summarizes what was learned{instruction_lang_note}, states the main takeaway in plain language, and provides a transition to the next chapter{instruction_lang_note}. If there is a next chapter, use a proper Markdown link: [Next Chapter Title](next_chapter_filename){link_lang_note}."
 
         prompt = f"""
-{language_instruction}Write a very beginner-friendly tutorial chapter (in Markdown format) for the project `{project_name}` about the concept: "{abstraction_name}". This is Chapter {chapter_num}.
+{language_instruction}Write a very beginner-friendly tutorial chapter (in Markdown format) for {tutorial_subject} about the {concept_kind}: "{abstraction_name}". This is Chapter {chapter_num}.
 
 Concept Details{concept_details_note}:
 - Name: {abstraction_name}
@@ -865,9 +884,9 @@ Instructions for the chapter (Generate content in {language.capitalize()} unless
 
 - If this is not the first chapter, begin with a brief transition from the previous chapter{instruction_lang_note}, referencing it with a proper Markdown link using its name{link_lang_note}.
 
-- Begin with a high-level motivation explaining what problem this abstraction solves{instruction_lang_note}. Start with a central use case as a concrete example. The whole chapter should guide the reader to understand how to solve this use case. Make it very minimal and friendly to beginners.
+{motivation_instr}
 
-- If the abstraction is complex, break it down into key concepts. Explain each concept one-by-one in a very beginner-friendly way{instruction_lang_note}.
+{breakdown_instr}
 
 {use_case_instr}
 
@@ -877,13 +896,17 @@ Instructions for the chapter (Generate content in {language.capitalize()} unless
 
 {deeper_instr}
 
-- IMPORTANT: When you need to refer to other core abstractions covered in other chapters, ALWAYS use proper Markdown links like this: [Chapter Title](filename.md). Use the Complete Tutorial Structure above to find the correct filename and the chapter title{link_lang_note}. Translate the surrounding text.
+{grounding_instr}
 
-- Use mermaid diagrams to illustrate complex concepts (```mermaid``` format). {mermaid_lang_note}.
+{reference_instr}
+
+{diagram_instr}
 
 - Heavily use analogies and examples throughout{instruction_lang_note} to help beginners understand.
 
-- End the chapter with a brief conclusion that summarizes what was learned{instruction_lang_note} and provides a transition to the next chapter{instruction_lang_note}. If there is a next chapter, use a proper Markdown link: [Next Chapter Title](next_chapter_filename){link_lang_note}.
+{check_understanding_instr}
+
+{ending_instr}
 
 - Ensure the tone is welcoming and easy for a newcomer to understand{tone_note}.
 
